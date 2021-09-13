@@ -1,0 +1,49 @@
+---
+title: "Assignment 1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Ryan McGuinness
+
+
+#### Importing Weather Data
+
+Weather data for Cleveland on the day of Sept. 10, 2021 was collected from [Weather Underground](https://www.wunderground.com/history/daily/us/oh/cleveland/KCLE/date/2021-9-10). Each record includes time recorded, temperature, wind characteristics, and more. 
+
+```{r}
+weather_data <- read.csv("weather.csv")
+weather_data
+```
+
+
+
+#### Adding Collumn to Indicate Time Elapsed Since Midnight
+
+In order to plot Temperature, we need a quantitative time variable. Let's use minutes passed since midnight as that variable.
+```{r}
+weather_data$hour <- strtoi(c(data.frame(strsplit(weather_data$Time, ":"))[1,]))
+weather_data$isPM <- c(data.frame(strsplit(weather_data$Time, " "))[2,]) == "PM"
+
+weather_data$Time_Since_Midnight <- c(60*(weather_data$hour + 12*(weather_data$isPM - (weather_data$hour == 12))) + 51) 
+# Each record is taken 51 minutes past the hour
+```
+
+Now, let's check that time variable.
+```{r}
+weather_data[c("Time", "Time_Since_Midnight", "Temperature")]
+```
+
+
+#### Including Plot for Temperature vs Time
+
+```{r}
+plot(weather_data$Time_Since_Midnight, weather_data$Temperature,
+     xlab="Time Since Midnight (min)", ylab="Temperature (F)")
+```
+
+
