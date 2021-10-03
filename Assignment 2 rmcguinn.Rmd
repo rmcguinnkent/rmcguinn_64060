@@ -4,18 +4,20 @@ output: html_document
 author: "Ryan McGuinness"
 ---
 
-```{r setup, include=FALSE, echo=FLASE}
+```{r setup, include=FALSE, echo=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, echo=FALSE}
+```{r}
 # Required packages
+library(ggplot2)
+library(lattice)
 library(class)
 library(caret)
 ```
 
 
-## Reading data
+### Reading data
 Data for training, validation, and testing is included in `UniversalBank.csv`. The first step of the project is to read that data. Education is a dummy variable with three possible values, so that will need to be broken into three variables.
 
 
@@ -42,7 +44,7 @@ summary(Bank.Selected)
 ```
 
 
-## Data splitting
+### Data splitting
 Next, we divide the data into training and validation. For questions 1-4, we need 60% of our data to be training, and 40% validation.
 
 ```{r}
@@ -55,7 +57,7 @@ Train.Data <- Bank.Selected[Train.Index,]
 Valid.Data <- Bank.Selected[-Train.Index,]
 ```
 
-## Normalizing
+### Normalizing
 We normalize the numeric predictors for training and validation data.
 
 ```{r}
@@ -72,8 +74,8 @@ summary(Train.Normalized)
 summary(Valid.Normalized)
 ```
 
-## Modelling k-NN
-For questions 1 and 4, we can given a particular customer.
+## 1. Classifying a customer with k=1
+For questions 1 and 4, we are given a particular customer. First, we must model that customer as a data frame.
 
 ```{r}
 # Creating data for a customer as described by question 1
@@ -96,7 +98,7 @@ nn[1]
 ```
 The k-NN model with k=1 predicts this customer will not accept a personal loan.
 
-## Finding the best k
+## 2. Finding the best k
 We will let k vary from 1 to 10 to see which choice of k is the best fit for this model. 
 ```{r}
 max.k <- 10
@@ -114,3 +116,85 @@ knn.accuracy
 ```
 
 It appears our best choice of k is k=3.
+
+## 3. Confusion Matrix for k=3
+Let's display the confusion matrix and other statistics for the choice of k=3.
+```{r}
+predicted <- knn(Train.Normalized[,-7], Valid.Normalized[,-7],
+                   Train.Normalized[,7], k=3)
+
+confusionMatrix(predicted, actual)
+```
+
+## 4. Classifying the customer with k=3
+Let's reclassify the previous customer, using the choice of k=3.
+```{r}
+nn <- knn(Train.Normalized[,-7], Customer.Normalized, Train.Normalized[,7],
+          k=3, prob=TRUE)
+nn[1]
+```
+
+The model still predicts that this customer will not accept the loan.
+
+### Repartitioning data
+For question 5, we partition the data into three sets: training (50%), validation (30%), and testing (20%).
+
+```{r}
+# Setting random seed to get reproducible results
+set.seed(1357)
+
+# Splitting data into testing and training/validation
+Test.Index <- createDataPartition(Bank.Selected$Personal.Loan, p=0.2, list=FALSE)
+Test.Data <- Bank.Selected[Test.Index,]
+TrainValid.Data <- Bank.Selected[-Test.Index,]
+
+# Splitting training/validation data into training and validation
+Train.Index <- createDataPartition(TrainValid.Data$Personal.Loan, p=(5/8),
+                                   list=FALSE)
+Train.Data <- TrainValid.Data[Train.Index,]
+Valid.Data <- TrainValid.Data[-Train.Index,]
+```
+
+### Normalizing
+We need to create two normalization models, one based on the training set when applying the model to the validation set, and the other based on the training ad validation sets when applying the model to the test set
+
+```{r}
+# Copying original data
+Train.Normalized <- Train.Data
+Valid.Normalized <- Valid.Data
+
+TrainValid.Normalized <- TrainValid.Data
+Test.Normalized <- Test.Data
+
+# Creating normalization model for first 6 variables in training data
+norm.model <- preProcess(Train.Data[,1:6], method=c("center", "scale"))
+Train.Normalized[,1:6] <- predict(norm.model, Train.Data[,1:6])
+Valid.Normalized[,1:6] <- predict(norm.model, Valid.Data[,1:6])
+
+# Creating normalization model for first 6 variables in training/validation data
+
+norm.test.model <- preProcess(TrainValid.Data[,1:6], method=c("center", "scale"))
+TrainValid.Normalized[,1:6] <- predict(norm.test.model, TrainValid.Data[,1:6])
+Test.Normalized[,1:6] <- predict(norm.test.model, Test.Data[,1:6])
+```
+
+## 5. Generating confusion matricies with k=3
+#### Validation set
+We apply the k-NN model with k=3 to the validation set.
+```{r}
+actual <- factor(Valid.Normalized[, 7])
+predicted <- knn(Train.Normalized[,-7], Valid.Normalized[,-7], Train.Normalized[,7],
+                 k=3)
+confusionMatrix(predicted, actual)
+```
+
+#### Test set
+Finally, we apply the k-NN model to the test set.
+```{r}
+actual <- factor(Test.Normalized[, 7])
+predicted <- knn(TrainValid.Normalized[,-7], Test.Normalized[,-7],
+                 TrainValid.Normalized[,7], k=3)
+confusionMatrix(predicted, actual)
+```
+
+The accuracy for the test data confusion matrix is slightly higher than the accuracy for the validation data confusion matrix. This is probably due to there being more observations that the model uses for that test data. 
