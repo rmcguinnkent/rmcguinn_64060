@@ -1,0 +1,110 @@
+---
+title: "Assignment 2"
+output: html_document
+author: "Ryan McGuinness"
+---
+
+```{r setup, include=FALSE, echo=FLASE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+# Required packages
+library(class)
+library(caret)
+```
+
+
+## Reading data
+Data for training, validation, and testing is included in `UniversalBank.csv`. The first step of the project is to read that data. Education is a dummy variable with three possible values, so that will need to be broken into three variables.
+
+
+```{r}
+# Reading bank data
+Bank.Data <- read.csv("UniversalBank.csv")
+
+# Splitting Education into three variables
+Bank.Data$Education_1 <- Bank.Data$Education == 1
+Bank.Data$Education_2 <- Bank.Data$Education == 2
+Bank.Data$Education_3 <- Bank.Data$Education == 3
+
+head(Bank.Data)
+```
+
+ID and ZIP Code need not be used by the model, so we will remove them. Also, we can remove the old Education variable since we broke it into three components.
+
+```{r}
+# Removing ID (1), ZIP (5), and Education (8)
+Bank.Selected <- Bank.Data[c(-1, -5, -8)]
+
+head(Bank.Selected)
+summary(Bank.Selected)
+```
+
+
+## Data splitting
+Next, we divide the data into training and validation. For questions 1-4, we need 60% of our data to be training, and 40% validation.
+
+```{r}
+# Setting random seed to get reproducible results
+set.seed(2468)
+
+# Splitting data into training and validation
+Train.Index <- createDataPartition(Bank.Selected$Personal.Loan, p=0.6, list=FALSE)
+Train.Data <- Bank.Selected[Train.Index,]
+Valid.Data <- Bank.Selected[-Train.Index,]
+```
+
+## Normalizing
+We normalize the numeric predictors for training and validation data.
+
+```{r}
+# Copying original data
+Train.Normalized <- Train.Data
+Valid.Normalized <- Valid.Data
+
+# Creating normalization model for first 6 variables in training data
+norm.model <- preProcess(Train.Data[,1:6], method=c("center", "scale"))
+Train.Normalized[,1:6] <- predict(norm.model, Train.Data[,1:6])
+Valid.Normalized[,1:6] <- predict(norm.model, Valid.Data[,1:6])
+
+summary(Train.Normalized)
+summary(Valid.Normalized)
+```
+
+## Modelling k-NN
+For questions 1 and 4, we can given a particular customer.
+
+```{r}
+# Creating data for a customer as described by question 1
+Customer <- data.frame(Age=40, Experience=10, Income=84, Family=2, CCAvg=2,
+                       Mortgage=0, Securities.Account=0, CD.Account=0, Online=1,
+                       CreditCard=1, Education_1=FALSE, Education_2=TRUE, 
+                       Education_3=FALSE)
+
+# Normalizing the customer
+Customer.Normalized <- Customer
+Customer.Normalized[,1:6] <- predict(norm.model, Customer[,1:6])
+```
+
+We use the `knn()` function to find the single nearest neighbor to the customer to predict whether the customer will accept the personal loan.
+```{r}
+nn <- knn(Train.Normalized[,-7], Customer.Normalized, Train.Normalized[,7],
+          k=1, prob=TRUE)
+```
+
+## Finding the best k
+We will let k vary from 1 to 10 to see which choice of k is the best fit for this model. 
+```{r}
+knn.accuracy <- data.frame(k=(1:10), accuracy=rep(0, times=10))
+
+for (i in 1:10){
+  nn <- knn(Train.Normalized[,-7], Valid.Normalized[,-7], Train.Normalized[,7],
+            k=i)
+  knn.accuracy[i, 2] <- confusionMatrix(nn, Valid.Normalized[, 7])$overall[1]
+}
+
+knn.accuracy
+```
+
+
