@@ -91,20 +91,26 @@ We use the `knn()` function to find the single nearest neighbor to the customer 
 ```{r}
 nn <- knn(Train.Normalized[,-7], Customer.Normalized, Train.Normalized[,7],
           k=1, prob=TRUE)
+
+nn[1]
 ```
+The k-NN model with k=1 predicts this customer will not accept a personal loan.
 
 ## Finding the best k
 We will let k vary from 1 to 10 to see which choice of k is the best fit for this model. 
 ```{r}
-knn.accuracy <- data.frame(k=(1:10), accuracy=rep(0, times=10))
+max.k <- 10
+knn.accuracy <- data.frame(k=(1:max.k), accuracy=rep(0, times=max.k))
 
-for (i in 1:10){
-  nn <- knn(Train.Normalized[,-7], Valid.Normalized[,-7], Train.Normalized[,7],
-            k=i)
-  knn.accuracy[i, 2] <- confusionMatrix(nn, Valid.Normalized[, 7])$overall[1]
+actual <- factor(Valid.Normalized[, 7])
+
+for (i in 1:max.k){
+  predicted <- knn(Train.Normalized[,-7], Valid.Normalized[,-7],
+                   Train.Normalized[,7], k=i)
+  knn.accuracy[i, 2] <- confusionMatrix(predicted, actual)$overall[1]
 }
 
 knn.accuracy
 ```
 
-
+It appears our best choice of k is k=3.
