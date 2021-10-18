@@ -1,0 +1,108 @@
+---
+title: "Assignment 3"
+author: "Ryan McGuinness"
+date: "10/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem Description
+We use the Naive Bayes classification model to ultimately compute the proportion of loan accepters among online banking users with credit cards issued by the bank in the `UniversalBank.csv` dataset. 
+
+## Data Preparation
+
+First, we load required libraries.
+```{r}
+library(e1071)
+library(caret)
+```
+
+We read the data from `UniversalBank.csv`.
+```{r}
+Bank.Data <- read.csv("UniversalBank.csv")
+head(Bank.Data)
+```
+
+Next we must transform the data set. We only care about Personal.Loan, Online, and CreditCard variables. These variables then need to be transformed into factors. 
+```{r}
+# Removing all irrelevant variables, leaving online Personal.Loan, Online, and CreditCard
+Bank.Data <- Bank.Data[,c(10, 13, 14)]
+
+# Converting categorical variables into factors
+Bank.Data$Personal.Loan <- factor(Bank.Data$Personal.Loan)
+Bank.Data$Online <- factor(Bank.Data$Online)
+Bank.Data$CreditCard <- factor(Bank.Data$CreditCard)
+
+summary(Bank.Data)
+```
+
+The data is partitioned into training set (60%) and validation set (40%).
+```{r}
+# Setting random seed
+set.seed(127429)
+
+# Dividing Bank.Data into training and validation sets 60%/40%
+Train.Index <- createDataPartition(Bank.Data$Personal.Loan, p=0.6, list=FALSE)
+Train.Data <- Bank.Data[Train.Index,]
+Valid.Data <- Bank.Data[-Train.Index,]
+```
+
+## Part A: Visualizing Training Set
+The following table conveys the counts in the training set where the CC and Online variables are considered together.
+```{r}
+Online.CC.Table <- table(Train.Data$Personal.Loan, Train.Data$Online, Train.Data$CreditCard, dnn=c("Personal Loan", "Online", "Credit Card"))
+Online.CC.Table
+```
+
+## Part B: Computing P(Loan | Online & CC) Directly
+We can look at the table from Part A to get an immediate calculation of the proportion of loan accepters among online banking users with credit cards issued by the bank. Of the 537 records where of active online banking users with credit cards, 48 had accepted a personal loan, so $\textbf{P}(\text{Loan}=1\ |\ \text{CC}=1,\text{ Online}=1) = \frac{48}{537} = 0.089$.
+```{r}
+# Computing P(loan | Online & CC)
+Online.CC.Table[2,2,2] / (Online.CC.Table[2,2,2] + Online.CC.Table[1,2,2])
+```
+
+
+## Part C: Visualizing Separated Training Set 
+The following tables convey the counts in the training set for the CC and Online variables separately.
+```{r}
+Online.Table <- table(Train.Data$Personal.Loan, Train.Data$Online, dnn=c("Personal Loan", "Online"))
+Online.Table
+CC.Table <- table(Train.Data$Personal.Loan, Train.Data$CreditCard, dnn=c("Personal Loan", "Credit Card"))
+CC.Table
+```
+
+## Part D: Computing various probabilities for Naive Bayes method
+In order to compute $\textbf{P}\text{(Loan = 1 | Online = 1 & CC = 1)}$, we need to find the following six probabilities: $\textbf{P}\text{(CC = 1 | Loan = 1)}$, $\textbf{P}\text{(Online = 1 | Loan = 1)}$, $\textbf{P}\text{(Loan = 1)}$, $\textbf{P}\text{(CC = 1 | Loan = 0)}$, $\textbf{P}\text{(Online = 1 | Loan = 0)}$, and $\textbf{P}\text{(Loan = 0)}$.
+```{r}
+# P(Online | Loan)
+p_ol <- Online.Table[2,2] / (Online.Table[2,2] + Online.Table[2,1])
+p_ol
+# P(CC | Loan)
+p_cl <- CC.Table[2,2] / (CC.Table[2,2] + CC.Table[2,1])
+p_cl
+# P(Loan)
+p_l <- sum(Train.Data$Personal.Loan==1) / length(Train.Data$Personal.Loan)
+p_l
+# P(Online | !Loan)
+p_onl <- Online.Table[1,2] / (Online.Table[1,2] + Online.Table[1,1])
+p_onl
+# P(CC | !Loan)
+p_cnl <- CC.Table[1,2] / (CC.Table[1,2] + CC.Table[1,1])
+p_cnl
+# P(!Loan)
+p_nl <- sum(Train.Data$Personal.Loan==0) / length(Train.Data$Personal.Loan)
+p_nl
+```
+
+## Part E: Computing P(Loan | Online & CC) Via Naive Bayes
+Using the Naive Bayes method and the probabilities computed in Part D, we find $\textbf{P}(\text{Loan}=1\ |\ \text{CC}=1,\text{ Online}=1) = 0.096$.
+```{r}
+(p_ol * p_cl * p_l) / (p_ol * p_cl * p_l + p_onl * p_cnl * p_nl)
+```
+
+## Part F: Comparing Naive Bayes to Direct Calculaton
+Using the Naive Bayes classifier, we get a higher value for $\textbf{P}(\text{Loan}=1\ |\ \text{CC}=1,\text{ Online}=1)$ than with the direct computation. Interestingly, the Naive Bayes approach gives $\textbf{P}(\text{Loan}=1\ |\ \text{CC}=1,\text{ Online}=1) = 0.096$, but in Part D we found that $\textbf{P}\text{(Loan = 1)} = 0.096$ to begin with. So the Naive Bayes approach suggests that the probability a person will accept the loan is independent of whether that person is an online user with a bank-issued credit card.
+
