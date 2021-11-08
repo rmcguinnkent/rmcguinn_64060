@@ -1,0 +1,142 @@
+---
+title: "Assignment 4: k-Means Clustering"
+author: "Ryan McGuinness"
+date: "10/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem Description
+We will perform k-means clustering based on financial data gathered on 21 pharmaceutical firms. Specifically, 21 firms will be clustered based on 9 numeric variables, name these clusters, and interpret those clusters and see if there is any relation between the clusters and the categorical variables.
+
+## Preparing Data
+### Importing required packages
+While `kmeans` is implemented in base R, the `factoextra` package allows for nicer data visualization
+```{r}
+library(tidyverse)
+library(factoextra)
+```
+
+
+### Importing data
+The data on the 21 firms are located in `Pharaceuticals.csv`. We need to read the data and separate out the 9 numeric variables that will be used for the k-means clustering algorithm, and normalize the variables.
+```{r}
+# Reading data from csv
+Firm.Data <- read.csv("Pharmaceuticals.csv")
+head(Firm.Data)
+
+# Selecting and normalizing numeric data
+Firm.Data.Numeric <- Firm.Data[, 3:11]
+Firm.Data.Normal <- scale(Firm.Data.Numeric)
+```
+
+The numeric variables represent market capitalization (in billions of dollars), the Beta value, price/earnings ratio, return on equity, return on assets, asset turnover, leverage, estimated revenue growth, and net profit margin. The categorical variables represent the firm's median recommendation across major brokerages, the country the firm is located in, and the stock exchange on which the firm is listed.
+
+## K-means algorithm
+First, we need to select the number of clusters to use for k-means. The Average Silhouette Method will be used for this purpose.
+```{r}
+# Setting random seed to ensure consistency
+set.seed(246251)
+
+fviz_nbclust(Firm.Data.Normal, kmeans, method="silhouette")
+```
+
+
+It appears that five clusters would be an appropriate choice. Now, we can use `kmeans` on the data set.
+```{r}
+k5 <- kmeans(Firm.Data.Normal, centers=5, nstart=25)
+k5$centers
+k5$size
+```
+
+We can visualize these clusters with the `fviz_cluster` method, but only in two dimensions at a time.
+```{r}
+fviz_cluster(k5, data=Firm.Data.Normal, choose.vars = c("ROE", "ROA"),
+             main="Cluster Plot 1")
+```
+
+```{r}
+fviz_cluster(k5, data=Firm.Data.Normal, choose.vars = c("PE_Ratio", "Rev_Growth"),
+             main="Cluster Plot 2")
+```
+
+```{r}
+fviz_cluster(k5, data=Firm.Data.Normal, choose.vars = c("Rev_Growth", "Beta"), 
+             main="Cluster plot 3")
+```
+
+### Inspecting clusters
+By inspecting the charts above, we can attempt to give descriptive names to each cluster. We can also use R to print out the contents of each cluster.
+
+#### Cluster 1 
+Plot 1 gives the clearest separation between cluster 1 and any other cluster, so we might call this cluster "mid ROA".
+```{r}
+Firm.Data$Symbol[k5$cluster==1]
+```
+
+#### Cluster 2
+Plot 3 gives the clearest separation between cluster 2 and any other cluster, so we might call this cluster "low rev_growth / high beta".
+```{r}
+Firm.Data$Symbol[k5$cluster==2]
+```
+
+#### Cluster 3
+Plot 2 gives the clearest separation between cluster 3 and any other cluster, so we might call this cluster "high PE_Ratio".
+```{r}
+Firm.Data$Symbol[k5$cluster==3]
+```
+
+#### Cluster 4
+Plot 1 gives the clearest separation between cluster 4 and any other cluster, so we might call this cluster "high ROE / high ROA".
+```{r}
+Firm.Data$Symbol[k5$cluster==4]
+```
+
+#### Cluster 5
+Plot 3 gives the clearest separation between cluster 2 and any other cluster, so we might call this cluster "high Rev_Growth".
+```{r}
+Firm.Data$Symbol[k5$cluster==5]
+```
+
+## Comparing Clusters and Categorical Variables
+We can attempt to look for patterns in the categorical variables within each cluster. While it can be hard to find meaningful patterns in clusters with only a few members, we will try to do this anyway. Note that 19 of the 21 firms are listed on NYSE, and that 13 of the 21 firms are located in the US, with the only other country appearing multiple times in the data set being the UK, which is home to 3 of the firms.
+```{r}
+# Appending the cluster to which each firm belongs on to the data frame
+Firm.Data$Cluster <- k5$cluster
+```
+
+### mid ROA
+This is the largest cluster, yet no strong pattern can be observed. Interestingly, two of the three firms from the UK belong to this cluster, and the only firm with a "Strong Buy" median recommendation is in this cluster.
+```{r}
+Firm.Data %>% filter(Cluster==1) %>% select(Median_Recommendation, Location, Exchange)
+```
+
+### low Rev_Growth / high Beta
+The obviously interesting item in this cluster is that it includes both firms which are listed on exchanges other than NYSE.
+```{r}
+Firm.Data %>% filter(Cluster==2) %>% select(Median_Recommendation, Location, Exchange)
+```
+
+### high PE_Ratio
+This cluster being a group of just two firms, it might be completely meaningless to look for patterns here.
+```{r}
+Firm.Data %>% filter(Cluster==3) %>% select(Median_Recommendation, Location, Exchange)
+```
+
+### high ROE / high ROA
+Where two of the UK firms appeared in the "mid ROA" cluster (cluster 1), the third appears here with three US firms, but as far as patterns go, the only obvious pattern is that the median recommendation in this cluster lies between "Hold" and "Moderate Buy".
+```{r}
+Firm.Data %>% filter(Cluster==4) %>% select(Median_Recommendation, Location, Exchange)
+```
+
+### high Rev_Growth
+This cluster contains four firms from three different countries, the largest number of countries found within any cluster in this study, and the solely largest number of countries per firm within any cluster, and each cluster's median recommendation is for "moderate" action.
+```{r}
+Firm.Data %>% filter(Cluster==5) %>% select(Median_Recommendation, Location, Exchange)
+```
+
+
+
