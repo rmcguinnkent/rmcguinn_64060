@@ -1,0 +1,123 @@
+---
+title: "Hierarchical Clustering"
+author: "Ryan McGuinness"
+date: "11/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem Description
+We will use hierarchical clustering on a dataset consisting of nutritional
+information, in-store display information, and consumer ratings for 77 cereals. 
+Specifically, we will  
+
+* apply clustering to the data and, using Agnes, compare the clustering from single linkage, complete linkage, average linkage, and Ward to choose the best method, 
+* choose the number of clusters to use, and
+* find a cluster of "healthy cereals" for a hypothetical elementary school seeking to feed their kids a healthy diet.
+
+
+## Preprocessing Data
+First, we read the dataset in R.
+```{r}
+Cereals.df <- read.csv("Cereals.csv")
+head(Cereals.df)
+```
+
+Next, we remove any cereals with missing values.
+```{r}
+library(tidyr)
+library(dplyr)
+
+Cereals.df <- drop_na(Cereals.df)
+summary(Cereals.df)
+```
+
+Removing the records with missing values left us with a data set of 74 cereals.
+
+
+## Applying Hierarchical Clustering
+First, we must make a data frame with the normalized numeric data.
+```{r}
+# Constructing data frame normalized with "scale" of numeric data
+Cereals.df.norm <- Cereals.df[, -c(1,2,3)] %>% sapply(scale) %>% data.frame
+
+# Adding row names
+row.names(Cereals.df.norm) <- Cereals.df[, 1]
+
+summary(Cereals.df.norm)
+```
+
+We apply hierarchical clustering using Agnes with the euclidean distance as the 
+distance metric. 
+```{r}
+library(cluster)
+
+# Comparing clustering with single linkage, complete linkage, average linkage, and Ward
+METHODS <- c("single", "average", "complete", "ward")
+
+for (m in METHODS) {
+  agg_coef <- agnes(Cereals.df.norm, method=m, metric="euclidean")$ac
+  print(c(m, agg_coef))
+}
+```
+
+Ward's method has the highest agglomerative coefficient of the four methods tried,
+indicating that it produces the strongest clustering structure out of those four 
+methods. Going forward, we will use that method. 
+
+
+## Selecting Number of Clusters
+To select the number of clusters to use, we begin by plotting the dendrogram 
+to visualize the clusters and .
+```{r}
+# Computing distance based on all variables
+d.norm <- dist(Cereals.df.norm, method="euclidean")
+
+hc <- hclust(d.norm, method="ward.D")
+plot(hc, hang=-1, cex=0.5)
+
+# Displaying cluster rectangles
+rect.hclust(hc, k=6, border=2:7)
+```
+
+It appears that 6 is a good number of clusters to use, as there is a relatively 
+large gap in the height between cluster groupings between cluster groupings from
+the height of 13 to the height of 18. 4 clusters might be a good choice for a 
+similar reason, but I will stick to 6 clusters.
+
+## Selecting a Healthy Set of Cereals
+Using a few functions from the `dplyr` package, we can easily compare the clusters.
+```{r}
+# Cutting the Tree into 6 clusters
+Cereals.df.norm$hc_cut <- cutree(hc, 6)
+
+# Printing out the mean of each variable, grouped by cluster
+Cereals.df.norm %>% group_by(hc_cut) %>% summarise_all(mean) %>% round(2)
+```
+
+However, since these numbers have been normalized, this table can be hard to understand.
+We can fix this issue by applying the clusters we found above to the unnormalized data frame
+and applying the same procedure.
+```{r}
+# Cutting the Tree into 6 clusters
+Cereals.df.unnorm <- Cereals.df[, -c(1, 2, 3)]
+Cereals.df.unnorm$hc_cut <- cutree(hc, 6)
+row.names(Cereals.df.unnorm) <- Cereals.df[,1]
+
+# Printing out the mean of each variable, grouped by cluster
+Cereals.df.unnorm %>% group_by(hc_cut) %>% summarise_all(mean) %>% round(2)
+```
+
+What "healthy" means might differ from school to school. But for the sake of example, 
+a school looking for low-fat, low-sugar options might consider cereals from clusters 
+1, 4 and 5. Cluster 5 minimizes those variables, while being comparable in other areas
+except vitamins. If vitamins are considered important as well, then the school might
+go for cluster 4 instead.
+
+```{r}
+Cereals.df.unnorm %>% filter(hc_cut==4) %>% row.names
+```
+
