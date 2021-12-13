@@ -1,0 +1,335 @@
+---
+title: "Final Project"
+author: "Ryan McGuinness"
+date: "11/30/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Data Description
+The data set available for this project comes from the 2015 Behavioral Risk Factor Surveillance System (BRFSS). The labels diabetic, prediabetic, and not diabetic are given along with 21 predictor variables. Below is a summary of the variables. 
+
+* Categorical Variables
+  * HighBP - (binary) 1: high blood pressure
+  * HighChol - (binary) 1: high cholesterol
+  * CholCheck - (binary) 1: cholesterol has been checked at least once in last five years
+  * Smoker - (binary) 1: has smoked at least 5 packs of cigarettes (100 total) in lifetime
+  * Stroke - (binary) 1: has suffered a stroke
+  * HeartDiseaseorAttack - (binary) 1: has had coronary heart disease or myocardial infraction
+  * PhysActivity - (binary) 1: has had physical activity in last 30 days (not including job)
+  * Fruits - (binary) 1: has one or more fruits per day
+  * Veggies - (binary) 1: has one or more vegetables per day
+  * HvyAclcoholSonsump - (binary) 1: has at least 14 drinks per week if a man, or at least 7 drinks per week if a woman
+  * AnyHealthcare - (binary) 1: has any kind of healthcare coverage
+  * NoDocbcCost - (binary) 1: has needed to see a doctor sometime in last 12 months, but couldn't because of costs
+  * GenHlth - (5 levels) general level of health
+    * 1: excellent
+    * 2: very good
+    * 3: good
+    * 4: fair
+    * 5: poor
+  * DiffWalk - (binary) 1: has difficulty walking or climbing stairs
+  * Sex - (binary) 1: is male
+  * Age - (13 levels) age in five year groups - 1: 18-24, 2: 25-29, 3: 30-34 ... 12: 75-79, 13: 80 or older
+  * Education - (6 levels) level of education
+    * 1: never attended school or only kindergarten
+    * 2: only attended grades 1-8
+    * 3: attended some high school
+    * 4: high school graduate or equivalent
+    * 5: some college or technical school
+    * 6: college graduate
+  * Income - (8 levels) household income from all sources
+    * 1: less than $10,000
+    * 2: $10,000 - \$14,999
+    * 3: $15,000 - \$19,999
+    * 4: $20,000 - \$24,999
+    * 5: $25,000 - \$34,999
+    * 6: $35,000 - \$49,999
+    * 7: $50,000 - \$74,999
+    * 8: $75,000 or more
+* Numeric Variables
+  * BMI - Body-Mass Index
+  * MentHlth - In last 30 days, how many days has mental health not been good
+  * PhysHlth - In last 30 days, how many days has physical health not been good
+  
+  
+## Importing data
+The BRFSS data is located in `diabetes_ternary.csv`.
+```{r}
+library(dplyr)
+
+# Reading from csv
+data <- read.csv("diabetes_ternary.csv")
+
+head(data)
+```
+
+Several transformations need to be made.
+
+```{r}
+# Treating GenHlth variable
+data$GenHlth_1 <- (data$GenHlth == 1)
+data$GenHlth_2 <- (data$GenHlth == 2)
+data$GenHlth_3 <- (data$GenHlth == 3)
+data$GenHlth_4 <- (data$GenHlth == 4)
+data$GenHlth_5 <- (data$GenHlth == 5)
+
+# Treating Age variable
+data$Age_1 <- (data$Age == 1)
+data$Age_2 <- (data$Age == 2)
+data$Age_3 <- (data$Age == 3)
+data$Age_4 <- (data$Age == 4)
+data$Age_5 <- (data$Age == 5)
+data$Age_6 <- (data$Age == 6)
+data$Age_7 <- (data$Age == 7)
+data$Age_8 <- (data$Age == 8)
+data$Age_9 <- (data$Age == 9)
+data$Age_10 <- (data$Age == 10)
+data$Age_11 <- (data$Age == 11)
+data$Age_12 <- (data$Age == 12)
+data$Age_13 <- (data$Age == 13)
+
+# Treating Education variable
+data$Education_1 <- (data$Education == 1)
+data$Education_2 <- (data$Education == 2)
+data$Education_3 <- (data$Education == 3)
+data$Education_4 <- (data$Education == 4)
+data$Education_5 <- (data$Education == 5)
+data$Education_6 <- (data$Education == 6)
+
+# Treating Income variable
+data$Income_1 <- (data$Income == 1)
+data$Income_2 <- (data$Income == 2)
+data$Income_3 <- (data$Income == 3)
+data$Income_4 <- (data$Income == 4)
+data$Income_5 <- (data$Income == 5)
+data$Income_6 <- (data$Income == 6)
+data$Income_7 <- (data$Income == 7)
+data$Income_8 <- (data$Income == 8)
+
+# Removing multi-valued categorical variables from data frame
+data <- subset(data, select=-c(GenHlth, Age, Education, Income))
+
+# Normalizing numeric variables
+data$BMI <- scale(data$BMI)
+data$MentHlth <- scale(data$MentHlth)
+data$PhysHlth <- scale(data$PhysHlth)
+```
+
+## k-NN (Direct)
+
+### Finding optimal k values
+```{r}
+library(caret)
+set.seed(1320987)
+
+index <- createDataPartition(data$Diabetes_012, p = 0.8, list=FALSE)
+valid_train <- data[index,]
+test <- data[-index,]
+
+index <- createDataPartition(valid_train$Diabetes_012, p = 0.75, list=FALSE)
+train <- valid_train[index,]
+valid <- valid_train[-index,]
+```
+
+```{r}
+train_predictors <- train %>% select(-Diabetes_012) %>% data.matrix()
+valid_predictors <- valid %>% select(-Diabetes_012) %>% data.matrix()
+valid_train_predictors <- valid_train %>% select(-Diabetes_012) %>% data.matrix()
+test_predictors <- test %>% select(-Diabetes_012) %>% data.matrix()
+```
+
+```{r}
+library(class)
+k_max <- 12
+accuracy <- data.frame(k=(2:k_max), acc=rep(0, times=k_max-1))
+
+for (i in 2:k_max) {
+  # print(i)
+  predicted <- knn(train_predictors, valid_predictors, train$Diabetes_012,
+                   k=i)
+  accuracy[i-1, 2] <- confusionMatrix(predicted, valid$Diabetes_012)$overall[1]
+}
+
+accuracy
+```
+
+
+### Testing results
+```{r}
+# Testing first stage: no diabetes vs diabetes/prediabetes
+predicted <- knn(valid_train_predictors, test_predictors,
+                     valid_train$Diabetes_012, k=12)
+
+
+confusionMatrix(predicted, test$Diabetes_012)
+```
+
+## k-NN (Split)
+```{r}
+library(dplyr)
+
+# Treating Diabetes_012 variable
+data$Diabetes_Any <- factor(data$Diabetes_012 != 0)
+data$Diabetes_2   <- factor(data$Diabetes_012 == 2)
+
+data_12 <- data %>% filter(Diabetes_Any == TRUE)
+```
+
+### Dividing data into training, validation, and test sets
+```{r}
+library(caret)
+set.seed(1320987)
+
+index <- createDataPartition(data$Diabetes_Any, p = 0.8, list=FALSE)
+valid_train_any <- data[index,]
+test_any <- data[-index,]
+
+index <- createDataPartition(valid_train_any$Diabetes_Any, p = 0.75, list=FALSE)
+train_any <- valid_train_any[index,]
+valid_any <- valid_train_any[-index,]
+
+set.seed(1253146)
+index <- createDataPartition(data_12$Diabetes_2, p = 0.8, list=FALSE)
+valid_train_2 <- data_12[index,]
+test_2 <- data_12[-index,]
+
+index <- createDataPartition(valid_train_2$Diabetes_2, p = 0.5, list=FALSE)
+train_2 <- valid_train_2[index,]
+valid_2 <- valid_train_2[-index,]
+```
+
+### Separating labels from predictor variables
+```{r}
+train_any_predictors <- train_any %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+valid_any_predictors <- valid_any %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+valid_train_any_predictors <- valid_train_any %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+test_any_predictors <- test_any %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+
+train_2_predictors <- train_2 %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+valid_2_predictors <- valid_2 %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+valid_train_2_predictors <- valid_train_2 %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+test_2_predictors <- test_2 %>% select(
+  -c(Diabetes_2, Diabetes_Any, Diabetes_012)) %>% data.matrix()
+```
+
+
+### Finding optimal k values
+```{r}
+library(class)
+k_max <- 14
+accuracy <- data.frame(k=(2:k_max), acc=rep(0, times=k_max-1))
+
+for (i in 2:k_max) {
+  # print(i)
+  predicted <- knn(train_any_predictors, valid_any_predictors, train_any$Diabetes_Any,
+                   k=i)
+  accuracy[i-1, 2] <- confusionMatrix(predicted, valid_any$Diabetes_Any)$overall[1]
+}
+
+accuracy
+```
+
+
+```{r}
+k_max <- 14
+accuracy <- data.frame(k=(2:k_max), acc=rep(0, times=k_max-1))
+
+for (i in 2:k_max) {
+  print(i)
+  predicted <- knn(train_2_predictors, valid_2_predictors, train_2$Diabetes_2,
+                   k=i)
+  accuracy[i-1, 2] <- confusionMatrix(predicted, valid_2$Diabetes_2)$overall[1]
+}
+
+accuracy
+```
+
+
+### Testing results
+```{r}
+# Testing first stage: no diabetes vs diabetes/prediabetes
+predicted_any <- knn(valid_train_any_predictors, test_any_predictors,
+                     valid_train_any$Diabetes_Any, k=11)
+
+# Preparing data that tested positive for signs of diabetes to be tested for prediabetes vs diabetes
+tested_pos_predictors <- test_any_predictors[predicted_any == TRUE,]
+tested_pos_labels <- test_any[predicted_any == TRUE, "Diabetes_2"]
+
+# Testing second stage: diabetes vs prediabetes
+predicted_2 <- knn(valid_train_2_predictors, tested_pos_predictors, valid_train_2$Diabetes_2,
+                   k=13)
+
+predicted_012 <- rep(0, times=nrow(test_any))
+pos_index = 0
+for (i in 1:length(predicted_012)) {
+  if (predicted_any[i] == TRUE) {
+    pos_index <- pos_index + 1
+    predicted_012[i] <- ifelse(predicted_2[pos_index] == TRUE, 2, 1) 
+  }
+}
+
+predicted_012 <- factor(predicted_012)
+confusionMatrix(predicted_any, test_any$Diabetes_Any)
+
+confusionMatrix(predicted_012, factor(test_any$Diabetes_012))
+```
+
+### Cleaning up to free memory
+```{r}
+# removing objects from environment to free memory
+rm(data_12)
+rm(test_2)
+rm(test_2_predictors)
+rm(tested_pos_predictors)
+rm(tested_pos_labels)
+rm(train_2)
+rm(train_2_predictors)
+rm(valid_2) 
+rm(valid_2_predictors)
+rm(valid_train_2)
+rm(valid_train_2_predictors)
+rm(test_any)
+rm(test_any_predictors)
+rm(valid_any)
+rm(valid_any_predictors)
+rm(train_any)
+rm(train_any_predictors)
+rm(valid_train_any)
+rm(valid_train_any_predictors)
+
+# removing variables from data made for previous classification
+data <- data %>% select(-c(Diabetes_Any, Diabetes_2))
+```
+
+
+## Naive Bayes
+```{r}
+library(e1071)
+
+# partitioning the data (80% training, 20% test)
+set.seed(12557190)
+index <- createDataPartition(data$Diabetes_012, p=0.8, list=FALSE)
+train <- data[index,]
+test <- data[-index,]
+
+# defining the classifier
+classifier <- naiveBayes(Diabetes_012 ~ ., data=data)
+
+# applying classifier model
+predicted <- predict(classifier, test)
+
+confusionMatrix(predicted, factor(test$Diabetes_012))
+```
+
